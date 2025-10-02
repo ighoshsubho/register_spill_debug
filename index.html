@@ -338,6 +338,7 @@
                 <h3>How to Get PTX Code</h3>
                 <p>Compile your CUDA kernel: <code>nvcc -ptx kernel.cu -o kernel.ptx</code></p>
                 <p>View register usage: <code>nvcc --ptxas-options=-v kernel.cu</code></p>
+                <p>In triton, you can view the PTX code of a kernel by using <code>your_kernel.cache[0].values().asm['ptx']</code></p>
             </div>
 
             <div class="input-section">

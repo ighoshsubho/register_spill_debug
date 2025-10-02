@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Spilling Debugger</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border: 1px solid #ddd;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 30px 40px;
+            border-bottom: 3px solid #34495e;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            opacity: 0.85;
+            font-size: 0.95em;
+        }
+
+        .legend {
+            display: flex;
+            gap: 25px;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-box {
+            width: 18px;
+            height: 18px;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .main-content {
+            padding: 30px 40px;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: 1px solid #ddd;
+            background: white;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        button:hover {
+            background: #f8f8f8;
+            border-color: #999;
+        }
+
+        .btn-primary {
+            background: #2c3e50;
+            color: white;
+            border-color: #2c3e50;
+        }
+
+        .btn-primary:hover {
+            background: #34495e;
+            border-color: #34495e;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            resize: vertical;
+            background: #fafafa;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #2c3e50;
+            background: white;
+        }
+
+        .file-upload {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            background: #fafafa;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .results {
+            display: none;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #fafafa;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            font-weight: 600;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #2c3e50;
+        }
+
+        .canvas-container {
+            background: white;
+            padding: 20px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            cursor: crosshair;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #heatmapWrapper {
+            min-width: 600px;
+            width: 100%;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            white-space: nowrap;
+            font-family: 'Courier New', monospace;
+        }
+
+        .code-display {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            overflow-x: auto;
+            margin-bottom: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+        }
+
+        .code-line {
+            padding: 4px 8px;
+            display: block;
+            line-height: 1.6;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .code-line.spill-load {
+            background-color: rgba(77, 171, 247, 0.25);
+            border-left: 3px solid #4dabf7;
+        }
+
+        .code-line.spill-store {
+            background-color: rgba(255, 107, 107, 0.25);
+            border-left: 3px solid #ff6b6b;
+        }
+
+        .line-num {
+            color: #858585;
+            margin-right: 20px;
+            user-select: none;
+            display: inline-block;
+            min-width: 40px;
+        }
+
+        .how-to {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+
+        .how-to h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1em;
+            font-weight: 600;
+        }
+
+        .how-to code {
+            background: white;
+            padding: 2px 6px;
+            border: 1px solid #ddd;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+
+        .spill-bar {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 15px;
+        }
+
+        .spill-label {
+            width: 120px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        .spill-bar-fill {
+            height: 28px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85em;
+            transition: width 0.5s;
+        }
+
+        .bar-load {
+            background: #4dabf7;
+        }
+
+        .bar-store {
+            background: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Register Spilling Debugger</h1>
+            <p class="subtitle">Analyze PTX code to identify and optimize register pressure</p>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-box" style="background: #4dabf7;"></div>
+                    <span>ld.local (Load Spill)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background: #ff6b6b;"></div>
+                    <span>st.local (Store Spill)</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="how-to">
+                <h3>How to Get PTX Code</h3>
+                <p>Compile your CUDA kernel: <code>nvcc -ptx kernel.cu -o kernel.ptx</code></p>
+                <p>View register usage: <code>nvcc --ptxas-options=-v kernel.cu</code></p>
+            </div>
+
+            <div class="input-section">
+                <div class="file-upload">
+                    <input type="file" id="fileInput" accept=".ptx,.txt">
+                    <span id="fileName"></span>
+                </div>
+
+                <textarea id="ptxInput" placeholder="Paste your PTX code here or upload a file..."></textarea>
+
+                <div class="button-group">
+                    <button class="btn-primary" onclick="analyzePTX()">Analyze Spills</button>
+                    <button onclick="loadExample()">Load Example</button>
+                    <button onclick="clearAll()">Clear</button>
+                </div>
+            </div>
+
+            <div id="results" class="results">
+                <div class="stats-grid" id="statsGrid"></div>
+                
+                <div class="section">
+                    <div class="section-title">Memory Traffic Heatmap</div>
+                    <div class="canvas-container">
+                        <div id="heatmapWrapper">
+                            <canvas id="heatmapCanvas"></canvas>
+                        </div>
+                        <div id="tooltip" class="tooltip"></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Spill Distribution</div>
+                    <div class="chart-container">
+                        <div id="chartArea"></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-title">Highlighted Code</div>
+                    <div class="code-display" id="codeDisplay"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const EXAMPLE_PTX = `.version 7.0
+.target sm_80
+.address_size 64
+
+.visible .entry example_kernel(
+    .param .u64 input,
+    .param .u64 output
+)
+{
+    .reg .pred %p<4>;
+    .reg .b32 %r<32>;
+    .reg .f32 %f<16>;
+    .reg .b64 %rd<8>;
+    
+    // High register pressure example
+    ld.param.u64 %rd1, [input];
+    ld.param.u64 %rd2, [output];
+    
+    // Spilling starts here
+    st.local.u32 [%rl1+0], %r1;  // Store to local memory (spill)
+    st.local.u32 [%rl1+4], %r2;
+    st.local.u32 [%rl1+8], %r3;
+    st.local.u32 [%rl1+12], %r4;
+    st.local.u32 [%rl1+16], %r5;
+    
+    // Some computation
+    mul.lo.s32 %r10, %r5, %r6;
+    add.s32 %r11, %r10, %r7;
+    
+    // Loading spilled values
+    ld.local.u32 %r20, [%rl1+0];  // Load from local memory (spill)
+    ld.local.u32 %r21, [%rl1+4];
+    ld.local.u32 %r22, [%rl1+8];
+    
+    // More computation
+    add.s32 %r25, %r20, %r21;
+    st.global.u32 [%rd2], %r25;
+    
+    ret;
+}`;
+
+        let currentSpills = [];
+
+        // Handle window resize
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (currentSpills.length > 0) {
+                    const canvas = document.getElementById('heatmapCanvas');
+                    drawMemoryTrafficHeatmap(canvas, currentSpills);
+                    setupHeatmapInteraction(canvas, currentSpills);
+                }
+            }, 250);
+        });
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('fileName').textContent = `Loaded: ${file.name}`;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('ptxInput').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function loadExample() {
+            document.getElementById('ptxInput').value = EXAMPLE_PTX;
+        }
+
+        function clearAll() {
+            document.getElementById('ptxInput').value = '';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileName').textContent = '';
+        }
+
+        function analyzePTX() {
+            const ptxCode = document.getElementById('ptxInput').value;
+            if (!ptxCode.trim()) {
+                alert('Please provide PTX code to analyze!');
+                return;
+            }
+
+            const lines = ptxCode.split('\n');
+            const spills = [];
+            let registerCount = 0;
+
+            // Parse for register count
+            for (const line of lines) {
+                const regMatch = line.match(/\.reg\s+\.\w+\s+%r<(\d+)>/);
+                if (regMatch) {
+                    registerCount = parseInt(regMatch[1]);
+                }
+            }
+
+            // Parse for spills
+            lines.forEach((line, i) => {
+                const trimmed = line.trim();
+                
+                const loadMatch = trimmed.match(/ld\.local\.\w+\s+(%\w+),\s*\[([^\]]+)\]/);
+                if (loadMatch) {
+                    spills.push({
+                        line: i,
+                        code: line,
+                        type: 'load',
+                        register: loadMatch[1],
+                        address: loadMatch[2]
+                    });
+                }
+
+                const storeMatch = trimmed.match(/st\.local\.\w+\s*\[([^\]]+)\],\s*(%\w+)/);
+                if (storeMatch) {
+                    spills.push({
+                        line: i,
+                        code: line,
+                        type: 'store',
+                        register: storeMatch[2],
+                        address: storeMatch[1]
+                    });
+                }
+            });
+
+            currentSpills = spills;
+            displayResults(lines, spills, registerCount);
+        }
+
+        function drawMemoryTrafficHeatmap(canvas, spills) {
+            const wrapper = document.getElementById('heatmapWrapper');
+            const containerWidth = wrapper.clientWidth;
+            
+            // Set responsive canvas size
+            const canvasWidth = Math.max(600, Math.min(containerWidth - 40, 1200));
+            const canvasHeight = 500;
+            
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(0, 0, width, height);
+
+            // Responsive positioning
+            const boxWidth = Math.min(150, width * 0.15);
+            const leftX = Math.max(50, width * 0.08);
+            const rightX = width - leftX - boxWidth;
+            const centerX = width / 2;
+            const boxHeight = Math.min(300, height * 0.6);
+            const boxY = (height - boxHeight) / 2;
+
+            // Draw Register File box
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(leftX, boxY, boxWidth, boxHeight);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Register File', leftX + boxWidth/2, boxY - 15);
+
+            // Draw Local Memory box
+            ctx.fillStyle = '#34495e';
+            ctx.fillRect(rightX, boxY, boxWidth, boxHeight);
+            ctx.fillStyle = 'white';
+            ctx.fillText('Local Memory', rightX + boxWidth/2, boxY - 15);
+
+            // Group spills by address
+            const addressMap = {};
+            spills.forEach(s => {
+                if (!addressMap[s.address]) {
+                    addressMap[s.address] = { loads: 0, stores: 0, registers: new Set() };
+                }
+                if (s.type === 'load') {
+                    addressMap[s.address].loads++;
+                } else {
+                    addressMap[s.address].stores++;
+                }
+                addressMap[s.address].registers.add(s.register);
+            });
+
+            const addresses = Object.keys(addressMap);
+            const maxTraffic = Math.max(...addresses.map(addr => 
+                addressMap[addr].loads + addressMap[addr].stores
+            ), 1);
+
+            // Draw traffic flows
+            addresses.forEach((addr, idx) => {
+                const yPos = boxY + (idx + 1) * (boxHeight / (addresses.length + 1));
+                const traffic = addressMap[addr];
+                const totalTraffic = traffic.loads + traffic.stores;
+                const intensity = totalTraffic / maxTraffic;
+
+                // Draw stores (register -> memory)
+                if (traffic.stores > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(leftX + boxWidth, yPos);
+                    ctx.quadraticCurveTo(centerX, yPos - 20, rightX, yPos);
+                    ctx.strokeStyle = `rgba(255, 107, 107, ${0.3 + intensity * 0.7})`;
+                    ctx.lineWidth = 2 + intensity * 4;
+                    ctx.stroke();
+
+                    // Arrow
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.beginPath();
+                    ctx.moveTo(rightX, yPos);
+                    ctx.lineTo(rightX - 10, yPos - 5);
+                    ctx.lineTo(rightX - 10, yPos + 5);
+                    ctx.fill();
+                }
+
+                // Draw loads (memory -> register)
+                if (traffic.loads > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(rightX, yPos);
+                    ctx.quadraticCurveTo(centerX, yPos + 20, leftX + boxWidth, yPos);
+                    ctx.strokeStyle = `rgba(77, 171, 247, ${0.3 + intensity * 0.7})`;
+                    ctx.lineWidth = 2 + intensity * 4;
+                    ctx.stroke();
+
+                    // Arrow
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.beginPath();
+                    ctx.moveTo(leftX + boxWidth, yPos);
+                    ctx.lineTo(leftX + boxWidth + 10, yPos - 5);
+                    ctx.lineTo(leftX + boxWidth + 10, yPos + 5);
+                    ctx.fill();
+                }
+
+                // Draw address label
+                ctx.fillStyle = '#333';
+                ctx.font = '11px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText(addr, centerX, yPos + 4);
+
+                // Traffic count
+                ctx.fillStyle = '#666';
+                ctx.font = '10px Arial';
+                ctx.fillText(`${traffic.stores}→ ←${traffic.loads}`, centerX, yPos + 18);
+            });
+
+            // Draw register indicators
+            const uniqueRegisters = new Set();
+            spills.forEach(s => uniqueRegisters.add(s.register));
+            const regArray = Array.from(uniqueRegisters).slice(0, 10);
+            
+            regArray.forEach((reg, idx) => {
+                const y = boxY + 20 + idx * 25;
+                ctx.fillStyle = '#ecf0f1';
+                ctx.fillRect(leftX + 10, y, boxWidth - 20, 20);
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '11px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText(reg, leftX + boxWidth/2, y + 14);
+            });
+
+            if (uniqueRegisters.size > 10) {
+                const y = boxY + 20 + 10 * 25;
+                ctx.fillStyle = '#666';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`+${uniqueRegisters.size - 10} more`, leftX + boxWidth/2, y + 10);
+            }
+
+            // Legend
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Legend:', 20, height - 60);
+            
+            ctx.strokeStyle = 'rgba(255, 107, 107, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(20, height - 40);
+            ctx.lineTo(80, height - 40);
+            ctx.stroke();
+            ctx.fillStyle = '#333';
+            ctx.fillText('Store (reg → mem)', 90, height - 36);
+
+            ctx.strokeStyle = 'rgba(77, 171, 247, 0.8)';
+            ctx.beginPath();
+            ctx.moveTo(20, height - 20);
+            ctx.lineTo(80, height - 20);
+            ctx.stroke();
+            ctx.fillText('Load (mem → reg)', 90, height - 16);
+        }
+
+        function setupHeatmapInteraction(canvas, spills) {
+            const tooltip = document.getElementById('tooltip');
+            const addressMap = {};
+            
+            spills.forEach(s => {
+                if (!addressMap[s.address]) {
+                    addressMap[s.address] = { loads: 0, stores: 0, registers: new Set() };
+                }
+                if (s.type === 'load') addressMap[s.address].loads++;
+                else addressMap[s.address].stores++;
+                addressMap[s.address].registers.add(s.register);
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Recalculate positions based on current canvas size
+                const width = canvas.width;
+                const height = canvas.height;
+                const boxHeight = Math.min(300, height * 0.6);
+                const boxY = (height - boxHeight) / 2;
+                const centerX = width / 2;
+
+                let found = false;
+                const addresses = Object.keys(addressMap);
+                addresses.forEach((addr, idx) => {
+                    const yPos = boxY + (idx + 1) * (boxHeight / (addresses.length + 1));
+                    if (Math.abs(x - centerX) < Math.min(200, width * 0.3) && Math.abs(y - yPos) < 20) {
+                        const traffic = addressMap[addr];
+                        tooltip.innerHTML = `
+                            Address: ${addr}<br>
+                            Stores: ${traffic.stores}<br>
+                            Loads: ${traffic.loads}<br>
+                            Registers: ${Array.from(traffic.registers).join(', ')}
+                        `;
+                        tooltip.style.left = e.clientX + 15 + 'px';
+                        tooltip.style.top = e.clientY + 15 + 'px';
+                        tooltip.style.opacity = '1';
+                        found = true;
+                    }
+                });
+
+                if (!found) {
+                    tooltip.style.opacity = '0';
+                }
+            });
+
+            canvas.addEventListener('mouseleave', () => {
+                tooltip.style.opacity = '0';
+            });
+        }
+
+        function displayResults(lines, spills, registerCount) {
+            const loadSpills = spills.filter(s => s.type === 'load').length;
+            const storeSpills = spills.filter(s => s.type === 'store').length;
+            const totalSpills = spills.length;
+
+            document.getElementById('results').style.display = 'block';
+
+            // Stats
+            document.getElementById('statsGrid').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalSpills}</div>
+                    <div class="stat-label">Total Spills</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${loadSpills}</div>
+                    <div class="stat-label">Load Spills</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${storeSpills}</div>
+                    <div class="stat-label">Store Spills</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${registerCount || '?'}</div>
+                    <div class="stat-label">Registers Used</div>
+                </div>
+            `;
+
+            // Draw heatmap
+            const canvas = document.getElementById('heatmapCanvas');
+            drawMemoryTrafficHeatmap(canvas, spills);
+            setupHeatmapInteraction(canvas, spills);
+
+            // Bar chart
+            const maxCount = Math.max(loadSpills, storeSpills, 1);
+            document.getElementById('chartArea').innerHTML = `
+                <div class="spill-bar">
+                    <div class="spill-label">Load Spills</div>
+                    <div class="spill-bar-fill bar-load" style="width: ${(loadSpills/maxCount)*100}%">
+                        ${loadSpills}
+                    </div>
+                </div>
+                <div class="spill-bar">
+                    <div class="spill-label">Store Spills</div>
+                    <div class="spill-bar-fill bar-store" style="width: ${(storeSpills/maxCount)*100}%">
+                        ${storeSpills}
+                    </div>
+                </div>
+            `;
+
+            // Highlighted code
+            const spillLines = new Set(spills.map(s => s.line));
+            const spillMap = {};
+            spills.forEach(s => spillMap[s.line] = s.type);
+
+            document.getElementById('codeDisplay').innerHTML = lines.map((line, i) => {
+                const className = spillLines.has(i) ? `spill-${spillMap[i]}` : '';
+                return `<span class="code-line ${className}"><span class="line-num">${(i+1).toString().padStart(4, ' ')}</span>${escapeHtml(line)}</span>`;
+            }).join('\n');
+
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
